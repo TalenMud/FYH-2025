@@ -102,6 +102,28 @@ def verify_token(f):
     return decorated_function
 
 # Routes
+@app.route('/', methods=['GET'])
+def root():
+    return jsonify({
+        'message': 'Screen Time Investment Tracker API',
+        'version': '1.0.0',
+        'endpoints': {
+            'health': '/health',
+            'auth': '/auth/login',
+            'user': {
+                'profile': '/user/profile',
+                'apps': '/user/apps',
+                'apptime': '/user/apptime'
+            },
+            'leaderboard': '/leaderboard',
+            'investments': {
+                'portfolio': '/investments/portfolio',
+                'setup': '/investments/setup',
+                'history': '/investments/history'
+            }
+        }
+    }), 200
+
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'healthy'}), 200
