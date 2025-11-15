@@ -8,35 +8,12 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const [showSplash, setShowSplash] = useState(true);
 
-  // Handle Auth0 callback → backend login → decide onboarding/profile
+  // Handle Auth0 callback → Skip auth and go directly to profile
   useEffect(() => {
-    const handleAuth = async () => {
-      if (isAuthenticated && user) {
-        try {
-          await authAPI.login({
-            email: user.email,
-            name: user.name,
-            user_id: user.sub,
-            picture: user.picture,
-          });
-
-          try {
-            const profileRes = await userAPI.getProfile();
-            if (!profileRes.data.tracked_apps || profileRes.data.tracked_apps.length === 0) {
-              navigate('/onboarding');
-            } else {
-              navigate('/profile');
-            }
-          } catch {
-            // If profile fetch fails, assume new user → onboarding
-            navigate('/onboarding');
-          }
-        } catch (err) {
-          console.error('Auth error:', err);
-        }
-      }
-    };
-    handleAuth();
+    if (isAuthenticated && user) {
+      // Directly navigate to profile without checking backend
+      navigate('/profile');
+    }
   }, [isAuthenticated, user, navigate]);
 
   // Theme bootstrap (same behaviour as the static HTML)

@@ -16,7 +16,7 @@ function App() {
       domain={domain}
       clientId={clientId}
       authorizationParams={{
-        redirect_uri: window.location.origin,
+        redirect_uri: `${window.location.origin}/profile`,
         audience: `https://${domain}/api/v2/`,
         scope: "openid profile email"
       }}
@@ -25,8 +25,8 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-          <Route path="/investments" element={<ProtectedRoute><InvestmentsPage /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/investments" element={<InvestmentsPage />} />
         </Routes>
       </Router>
     </Auth0Provider>

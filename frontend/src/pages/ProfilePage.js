@@ -1,355 +1,236 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useNavigate } from 'react-router-dom';
-import { userAPI, leaderboardAPI } from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, Settings, DollarSign } from 'lucide-react';
 
 const ProfilePage = () => {
   const { user } = useAuth0();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState(null);
-  const [appTimeHistory, setAppTimeHistory] = useState([]);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [graphMode, setGraphMode] = useState('time'); // 'time' or 'amount'
-  const [compareWith, setCompareWith] = useState('you');
-  const [showAppsModal, setShowAppsModal] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isDark, setIsDark] = useState(false);
+  const [userRank] = useState(3);
+  const [comparedUsers, setComparedUsers] = useState([]);
+  const [graphData, setGraphData] = useState([]);
+
+  const mockLeaderboard = [
+    { position: 1, name: 'Sarah Chen', time: '2h 45m', invested: '£10.50', data: [2.5, 3, 1.5, 2, 4, 1, 2] },
+    { position: 2, name: 'Mike Lee', time: '4h 10m', invested: '£12.80', data: [3.5, 4, 2.5, 3.5, 4.5, 2, 3] },
+    { position: 3, name: 'Alex Johnson', time: '5h 12m', invested: '£14.10', data: [3.5, 4, 2, 3, 5, 1.5, 2.5], isUser: true },
+    { position: 4, name: 'Emily Rodriguez', time: '5h 45m', invested: '£15.00', data: [4, 4.5, 3, 4, 5.5, 2, 3.5] },
+    { position: 5, name: 'David Kim', time: '6h 2m', invested: '£18.20', data: [4.5, 5, 3.5, 4.5, 6, 2.5, 4] },
+    { position: 6, name: 'Jessica Brown', time: '7h 30m', invested: '£22.50', data: [5, 5.5, 4, 5, 6.5, 3, 4.5] },
+  ];
+
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const userScrollData = [3.5, 4, 2, 3, 5, 1.5, 2.5];
+  const groupAverageData = [3, 3, 3, 3, 3, 3, 3];
 
   useEffect(() => {
-    loadData();
+    // Initialize graph data
+    const baseData = days.map((day, i) => ({
+      name: day,
+      'Your Time': userScrollData[i],
+      'Group Average': groupAverageData[i],
+    }));
+    setGraphData(baseData);
   }, []);
 
-  const loadData = async () => {
-    try {
-      const [profileRes, appTimeRes, leaderboardRes] = await Promise.all([
-        userAPI.getProfile(),
-        userAPI.getAppTime(7),
-        leaderboardAPI.getLeaderboard(),
-      ]);
-
-      setProfile(profileRes.data);
-      setAppTimeHistory(appTimeRes.data.history);
-      setLeaderboard(leaderboardRes.data.leaderboard);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      setLoading(false);
-    }
-  };
-
-  const processGraphData = () => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const dataMap = {};
-    
-    // Initialize all days
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dayKey = date.toISOString().split('T')[0];
-      dataMap[dayKey] = {
-        date: days[date.getDay()],
-        fullDate: dayKey,
-        you: 0,
-        leader: 0,
-        average: 0,
+  useEffect(() => {
+    // Update graph when compared users change
+    const updatedData = days.map((day, i) => {
+      const dataPoint = {
+        name: day,
+        'Your Time': userScrollData[i],
+        'Group Average': groupAverageData[i],
       };
-    }
-
-    // Process user's data
-    appTimeHistory.forEach(entry => {
-      const dayKey = entry.date;
-      if (dataMap[dayKey]) {
-        if (graphMode === 'time') {
-          dataMap[dayKey].you += entry.time_spent_hours;
-        } else {
-          dataMap[dayKey].you += entry.amount_charged;
+      
+      comparedUsers.forEach(userName => {
+        const user = mockLeaderboard.find(u => u.name === userName);
+        if (user) {
+          dataPoint[userName] = user.data[i];
         }
-      }
-    });
-
-    // Process leaderboard data for comparison
-    if (compareWith === 'leader' && leaderboard.length > 0) {
-      const leader = leaderboard[0];
-      // In a real app, you'd fetch leader's history
-      // For now, we'll use their weekly average
-      const avgDaily = leader.targeted_apps_time_weekly / 7;
-      Object.keys(dataMap).forEach(key => {
-        dataMap[key].leader = graphMode === 'time' ? avgDaily : (avgDaily * 2);
       });
-    }
-
-    // Calculate group average
-    const groupAvg = leaderboard.reduce((sum, u) => sum + u.targeted_apps_time_weekly, 0) / leaderboard.length;
-    const avgDaily = groupAvg / 7;
-    Object.keys(dataMap).forEach(key => {
-      dataMap[key].average = graphMode === 'time' ? avgDaily : (avgDaily * 2);
+      
+      return dataPoint;
     });
+    setGraphData(updatedData);
+  }, [comparedUsers]);
 
-    return Object.values(dataMap);
-  };
-
-  const getAppBreakdown = () => {
-    const breakdown = {};
-    appTimeHistory.forEach(entry => {
-      if (!breakdown[entry.app_name]) {
-        breakdown[entry.app_name] = 0;
-      }
-      breakdown[entry.app_name] += entry.time_spent_hours;
-    });
-    return breakdown;
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+  const toggleCompare = (userName) => {
+    setComparedUsers(prev => 
+      prev.includes(userName) 
+        ? prev.filter(u => u !== userName)
+        : [...prev, userName]
     );
-  }
+  };
 
-  if (!profile) {
-    return <div>Error loading profile</div>;
-  }
+  const getRankMedalColor = (rank) => {
+    if (rank === 1) return 'bg-yellow-400';
+    if (rank === 2) return isDark ? 'bg-gray-400' : 'bg-gray-500';
+    if (rank === 3) return 'bg-orange-400';
+    return 'bg-gray-300 dark:bg-gray-600';
+  };
 
-  const graphData = processGraphData();
-  const appBreakdown = getAppBreakdown();
+  const getOrdinal = (n) => {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+
+  // Theme toggle
+  useEffect(() => {
+    const prefersDark = localStorage.theme === 'dark' || 
+      (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    setIsDark(prefersDark);
+    if (prefersDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleTheme = (dark) => {
+    setIsDark(dark);
+    if (dark) {
+      document.documentElement.classList.add('dark');
+      localStorage.theme = 'dark';
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.theme = 'light';
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Profile Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-4">
-              <img
-                src={profile.pfp || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}`}
-                alt={profile.name}
-                className="w-16 h-16 rounded-full"
-              />
-              <div>
-                <h1 className="text-2xl font-bold">{profile.name}</h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-lg">
-                    {profile.leaderboard_position === 1 ? '🥇' : 
-                     profile.leaderboard_position === 2 ? '🥈' : 
-                     profile.leaderboard_position === 3 ? '🥉' : '🏅'}
-                  </span>
-                  <span className="text-gray-600">
-                    #{profile.leaderboard_position || 'N/A'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowAppsModal(true)}
-                className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 flex items-center gap-2"
-              >
-                <Settings className="w-4 h-4" />
-                Tracked Apps
-              </button>
-              <button
-                onClick={() => navigate('/investments')}
-                className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-2"
-              >
-                <DollarSign className="w-4 h-4" />
-                View Investments
-              </button>
-            </div>
-          </div>
+    <div className={isDark ? 'dark' : ''}>
+      <div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen p-4 transition-colors duration-300">
+        
+        {/* Theme Toggle */}
+        <div className="absolute top-6 right-6 flex space-x-2 z-10">
+          <button
+            onClick={() => toggleTheme(false)}
+            className={`p-2 rounded-full ${!isDark ? 'text-green-500' : 'text-gray-400'} hover:bg-gray-100 dark:hover:bg-gray-700`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => toggleTheme(true)}
+            className={`p-2 rounded-full ${isDark ? 'text-green-500' : 'text-gray-400'} hover:bg-gray-100 dark:hover:bg-gray-700`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          </button>
         </div>
 
-        {/* Stats Display */}
-        <div className="bg-gradient-to-r from-blue-600 to-green-600 rounded-2xl shadow-lg p-8 mb-6 text-white">
-          <div className="text-center">
-            <h2 className="text-4xl font-bold mb-2">
-              {profile.name} - {profile.targeted_apps_time_weekly.toFixed(1)} hours
-            </h2>
-            <p className="text-xl opacity-90 mb-4">on tracked apps this week</p>
-            <div className="flex items-center justify-center gap-2 mb-4">
-              {profile.tracked_apps?.map((app, idx) => (
-                <span key={idx} className="bg-white/20 px-3 py-1 rounded-full text-sm">
-                  {app}
-                </span>
-              ))}
+        {/* Main Content */}
+        <div className="w-full max-w-md mx-auto pt-16">
+          
+          {/* Header: Rank, Profile Pic, Button */}
+          <div className="flex items-center justify-between mb-6">
+            {/* Top Left: Leaderboard Rank */}
+            <div className="flex items-center space-x-2">
+              <div className={`w-10 h-10 rounded-full shadow-md ${getRankMedalColor(userRank)}`}></div>
+              <span className="text-xl font-black text-gray-900 dark:text-white">{getOrdinal(userRank)}</span>
             </div>
-            <p className="text-lg opacity-80">
-              Amount charged this week: £{profile.amount_charged_weekly.toFixed(2)}
+            
+            {/* Top Center: Profile Picture */}
+            <div className="absolute left-1/2 -translate-x-1/2">
+              <img 
+                src={user?.picture || `https://placehold.co/100x100/a7f3d0/14532d?text=${(user?.name || 'User').charAt(0).toUpperCase()}`}
+                alt="Profile" 
+                className="w-24 h-24 rounded-full border-4 border-green-500 dark:border-green-400 shadow-lg"
+              />
+            </div>
+            
+            {/* Top Right: View Investments Button */}
+            <button
+              onClick={() => navigate('/investments')}
+              className="bg-green-500 dark:bg-green-400 text-white text-sm font-semibold py-2 px-4 rounded-full shadow-lg hover:bg-green-600 dark:hover:bg-green-500 transition-colors duration-300"
+            >
+              View Investments
+            </button>
+          </div>
+
+          {/* User Info */}
+          <div className="text-center mb-8 pt-12">
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white">{user?.name || 'Test User'}</h1>
+            <p className="text-lg text-gray-600 dark:text-gray-400">
+              <span className="text-green-500 dark:text-green-400 font-bold">5h 12m</span> spent doomscrolling this week
             </p>
           </div>
-        </div>
 
-        {/* App Breakdown */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <h3 className="text-xl font-semibold mb-4">App Breakdown</h3>
-          <div className="flex flex-wrap gap-4">
-            {Object.entries(appBreakdown).map(([app, hours]) => (
-              <div key={app} className="flex-1 min-w-[150px]">
-                <div className="flex justify-between mb-2">
-                  <span className="font-medium">{app}</span>
-                  <span className="text-gray-600">{hours.toFixed(1)}h</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full"
-                    style={{ width: `${(hours / profile.targeted_apps_time_weekly) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Graph Section */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-            <h3 className="text-xl font-semibold">Weekly Trends</h3>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setGraphMode('time')}
-                className={`px-4 py-2 rounded-lg ${
-                  graphMode === 'time'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                App Screen Time
-              </button>
-              <button
-                onClick={() => setGraphMode('amount')}
-                className={`px-4 py-2 rounded-lg ${
-                  graphMode === 'amount'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                Amount Invested
-              </button>
-            </div>
-          </div>
-          <div className="mb-4">
-            <select
-              value={compareWith}
-              onChange={(e) => setCompareWith(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value="you">You</option>
-              <option value="leader">Leader</option>
-              <option value="average">Team Average</option>
-            </select>
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={graphData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="you"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                name="You"
-              />
-              {compareWith === 'leader' && (
-                <Line
-                  type="monotone"
-                  dataKey="leader"
-                  stroke="#ef4444"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  name="Leader"
-                />
-              )}
-              {compareWith === 'average' && (
-                <Line
-                  type="monotone"
-                  dataKey="average"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  name="Average"
-                />
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Leaderboard */}
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold flex items-center gap-2">
-              <Users className="w-6 h-6" />
-              Leaderboard
-            </h3>
-          </div>
-          <div className="space-y-3">
-            {leaderboard.map((entry, idx) => (
-              <div
-                key={entry.user_id}
-                className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                  entry.user_id === profile.user_id
-                    ? 'border-blue-600 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-                onClick={() => {
-                  if (entry.user_id !== profile.user_id) {
-                    setCompareWith(entry.user_id);
-                  }
-                }}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="text-2xl font-bold w-12 text-center">
-                    {entry.leaderboard_position}
-                  </div>
-                  <img
-                    src={entry.pfp || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.name)}`}
-                    alt={entry.name}
-                    className="w-12 h-12 rounded-full"
-                  />
-                  <div className="flex-1">
-                    <div className="font-semibold">{entry.name}</div>
-                    <div className="text-sm text-gray-600">
-                      {entry.targeted_apps_time_weekly.toFixed(1)}h • £{entry.amount_charged_weekly.toFixed(2)}/week
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    {entry.tracked_apps?.slice(0, 3).map((app, appIdx) => (
-                      <span key={appIdx} className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        {app}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Apps Modal */}
-        {showAppsModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-4">Tracked Apps</h3>
-              <div className="space-y-2 mb-4">
-                {profile.tracked_apps?.map((app, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <span>{app}</span>
-                  </div>
+          {/* Graph */}
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700" style={{ boxShadow: isDark ? '0 0 10px rgba(74, 222, 128, 0.4)' : '0 0 10px rgba(34, 197, 94, 0.3)' }}>
+            <h2 className="text-xl font-black mb-4 text-center text-gray-900 dark:text-white">Your Weekly Progress</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={graphData}>
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} />
+                <XAxis dataKey="name" stroke={isDark ? 'rgb(209, 213, 219)' : 'rgb(55, 65, 81)'} />
+                <YAxis stroke={isDark ? 'rgb(209, 213, 219)' : 'rgb(55, 65, 81)'} />
+                <Tooltip contentStyle={{ backgroundColor: isDark ? '#1f2937' : '#ffffff', border: '1px solid #d1d5db' }} />
+                <Legend />
+                <Line type="monotone" dataKey="Your Time" stroke={isDark ? 'rgb(74, 222, 128)' : 'rgb(34, 197, 94)'} strokeWidth={2} />
+                <Line type="monotone" dataKey="Group Average" stroke={isDark ? 'rgb(107, 114, 128)' : 'rgb(156, 163, 175)'} strokeWidth={2} strokeDasharray="5 5" />
+                {comparedUsers.map((userName, idx) => (
+                  <Line key={userName} type="monotone" dataKey={userName} strokeWidth={2} strokeDasharray="8 4" />
                 ))}
-              </div>
-              <button
-                onClick={() => setShowAppsModal(false)}
-                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
-              >
-                Close
-              </button>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Leaderboard */}
+          <div className="mt-8 bg-gray-50 dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700" style={{ boxShadow: isDark ? '0 0 10px rgba(74, 222, 128, 0.4)' : '0 0 10px rgba(34, 197, 94, 0.3)' }}>
+            <h2 className="text-xl font-black mb-4 text-center text-gray-900 dark:text-white">Leaderboard</h2>
+            
+            {/* Scrollable Table */}
+            <div className="overflow-y-auto max-h-60 pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: isDark ? '#4ade80 #1f2937' : '#a7f3d0 #f3f4f6' }}>
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="py-2 text-xs font-bold text-gray-600 dark:text-gray-400">Pos</th>
+                    <th className="py-2 text-xs font-bold text-gray-600 dark:text-gray-400">Name</th>
+                    <th className="py-2 text-xs font-bold text-gray-600 dark:text-gray-400">Time</th>
+                    <th className="py-2 text-xs font-bold text-gray-600 dark:text-gray-400 text-right">Invested</th>
+                    <th className="py-2 text-xs font-bold text-gray-600 dark:text-gray-400 text-center">Compare</th>
+                  </tr>
+                </thead>
+                <tbody className="text-gray-900 dark:text-white">
+                  {mockLeaderboard.map((entry) => (
+                    <tr key={entry.position} className="border-t border-gray-200 dark:border-gray-700">
+                      <td className="py-3 font-bold">
+                        {entry.position === 1 && <span className="text-yellow-400">1st</span>}
+                        {entry.position === 2 && <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>2nd</span>}
+                        {entry.position === 3 && <span className="text-orange-400">3rd</span>}
+                        {entry.position > 3 && <span className="text-gray-600 dark:text-gray-400">{entry.position}th</span>}
+                      </td>
+                      <td className="py-3">{entry.name}</td>
+                      <td className="py-3">{entry.time}</td>
+                      <td className="py-3 text-right">{entry.invested}</td>
+                      <td className="py-3 text-center">
+                        {entry.isUser ? (
+                          <span className="text-gray-500 dark:text-gray-400 font-semibold text-xs">You</span>
+                        ) : (
+                          <button
+                            onClick={() => toggleCompare(entry.name)}
+                            className={`text-xs font-semibold transition-colors ${
+                              comparedUsers.includes(entry.name)
+                                ? 'text-red-500 dark:text-red-400'
+                                : 'text-green-500 dark:text-green-400 hover:underline'
+                            }`}
+                          >
+                            {comparedUsers.includes(entry.name) ? 'Remove' : 'Add'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
+
+        </div>
       </div>
     </div>
   );
