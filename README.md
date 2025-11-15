@@ -39,7 +39,7 @@ A React web application that tracks screen time on social media and entertainmen
 
 2. **Set up environment variables**
    ```bash
-   cp .env.example .env
+   cp env.example .env
    ```
    Edit `.env` and fill in your Auth0 credentials and database settings.
 
